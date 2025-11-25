@@ -1,145 +1,126 @@
+```mermaid
 flowchart TD
 
-%% =======================
-%% Users & Frontend
-%% =======================
-User([משתמש])
-Frontend[Next.js Frontend\n- Input + Send\n- Dev Mode\n- Feedback Viewer\n- SSE Logs Stream]
+User([User])
+Frontend[Next.js Frontend]
 
-User --> Frontend
+User -->|Upload CSV| Frontend
+Frontend -->|POST /upload_csv| IngestionService
 
-%% =======================
-%% Query Service
-%% =======================
-Frontend -->|HTTP GET /ask_stream?question=...| QueryService
-Frontend -->|HTTP POST /ask| QueryService
-
-subgraph QueryService[FASTAPI QUERY SERVICE\n(ask, ask_stream)]
+subgraph IngestionService[File Ingestion Service]
     direction TB
 
-    QS_Ask[POST /ask\n• מריץ run_agent\n• מחזיר JSON סופי בלבד]
-    QS_Stream[GET /ask_stream\n• מפעיל event_generator\n• שולח לוגים + תשובה סופית ב-SSE]
+    ING_File[Parse CSV File]
+    ING_Split[Split Into Rows]
+    ING_Build[Build Embedding Text per Row]
+    ING_Batch[Batch Texts for Embedding]
+    ING_Embed[Call NVIDIA Embeddings API]
+    ING_Create[Ensure Qdrant Collection]
+    ING_Upsert[Upsert Vectors Into Qdrant]
+end
+
+IngestionService --> QdrantDB
+
+subgraph QdrantDB[Qdrant Vector Database]
+    Q_Vectors[Vectors Storage]
+    Q_Payloads[Payloads Storage]
+end
+
+ING_File --> ING_Split --> ING_Build --> ING_Batch --> ING_Embed --> ING_Create --> ING_Upsert
+```
+
+```mermaid
+flowchart TD
+
+User([User])
+Frontend[Next.js Frontend]
+
+User -->|Question Input| Frontend
+
+Frontend -->|GET /ask_stream| QueryService
+Frontend -->|POST /ask| QueryService
+
+subgraph QueryService[FastAPI Query Service]
+    direction TB
+
+    QS_Ask[Route POST ask]
+    QS_Stream[Route GET ask_stream]
+    QS_Sandbox[sandbox_create_env]
 
     QS_Ask --> QS_Sandbox
     QS_Stream --> QS_Sandbox
-
-    subgraph QS_Sandbox[sandbox_create_env()]
-        direction TB
-        PySandbox[Python Sandbox\n- utils\n- numpy\n- pandas\n- matplotlib Agg\n- io/base64\n- dynamic stdout capture\n- sys.modules["utils"]]
-    end
-
-    QS_Sandbox --> RunAgent
 end
 
-%% =======================
-%% RunAgent Logic
-%% =======================
-subgraph RunAgent[run_agent(user_question)]
+QS_Sandbox --> RunAgent
+
+subgraph RunAgent[run_agent Pipeline]
     direction TB
 
-    RA_Attempt1[Attempt 1:\ngenerate Python code with LLM]
-    RA_Execute1[exec(code)...\n• אם שגיאה → Attempt 2\n• אם הצלחה → מחזיר תשובה]
-    RA_Fallback["אם יש שגיאה:\nBuild new prompt:\n'Previous attempt failed...'\n→ regenerate code"]
-    RA_Return[final_answer + history]
+    RA_Attempt[Generate Code Attempt]
+    RA_Exec[Execute Code in Sandbox]
+    RA_Fallback[Regenerate Code on Error]
+    RA_Return[Return final_answer]
 
-    RunAgent --> RA_Attempt1 --> RA_Execute1
-    RA_Execute1 -->|error| RA_Fallback --> RA_Attempt1
-    RA_Execute1 -->|success| RA_Return
+    RA_Attempt --> RA_Exec
+    RA_Exec -->|Error| RA_Fallback --> RA_Attempt
+    RA_Exec -->|Success| RA_Return
 end
 
-%% =======================
-%% Agent LLM Logic
-%% =======================
-subgraph AgentLLM[NVIDIA LLM\nLLAMA-4 MAVERICK 17B\n(meta/llama-4-maverick-17b-128e-instruct)]
-    direction TB
+%% LLM Code Generator
+RA_Attempt --> AgentLLM
 
-    A_Prompt[AGENT_PROMPT\n• strict Python code\n• no markdown\n• Hebrew logs with §\n• semantic rules\n• allowed imports only\n• must define final_answer]
-    A_Code[Generates Raw Python Code\n(no comments)]
-
+subgraph AgentLLM[LLM Code Generator]
+    A_Prompt[Agent Prompt Rules]
+    A_Code[Generated Python Code]
     A_Prompt --> A_Code
 end
 
-RA_Attempt1 -->|system_prompt + user_prompt| AgentLLM
-AgentLLM -->|Generated Python code| QS_Sandbox
+AgentLLM --> QS_Sandbox
 
-%% =======================
-%% Generated Code Logic
-%% =======================
-subgraph GeneratedCode["Generated Python Pipeline\n(via LLM)"]
-    direction TB
-
-    GC_GetAll[utils.get_all_feedback()]
-    GC_Filtering[סינון מבני\noffice/service/Level]
-    GC_Semantic["Semantic Search:\nutils.embed → utils.search_feedback → utils.dynamic_cutoff"]
-    GC_LLMAsk["utils.ask_llm(system_prompt, user_prompt)"]
-    GC_Charts[matplotlib → base64 image]
-    GC_Table[pd.DataFrame → ליסט של dict]
-    GC_FinalAnswer[final_answer {...}]
-
-    GC_GetAll --> GC_Filtering
-    GC_Filtering --> GC_Semantic
-    GC_Semantic --> GC_LLMAsk
-    GC_LLMAsk --> GC_Charts
-    GC_LLMAsk --> GC_Table
-    GC_Charts --> GC_FinalAnswer
-    GC_Table --> GC_FinalAnswer
-end
-
+%% Generated Python Flow
 QS_Sandbox --> GeneratedCode
-GeneratedCode -->|print logs| QS_Stream
-GeneratedCode -->|final_answer| QS_Stream
 
-%% =======================
-%% Utils + Qdrant + NVIDIA
-%% =======================
-subgraph UtilsPy[utils.py]
+subgraph GeneratedCode[Generated Python Workflow]
     direction TB
 
-    U_Embed[embed(text)\n→ NVIDIA embeddings API\n(model: nvidia/llama-3.2-nemoretriever-300m-embed-v2)]
-    U_AskLLM[ask_llm(...)\n→ NVIDIA Chat Completion API]
-    U_Search[search_feedback(vector)\n→ Qdrant search]
-    U_Dynamic[dynamic_cutoff(query, results)\n• engineering drop cutoff\n• LLM-based relevance filter]
-    U_GetAll[get_all_feedback()]
+    GC_GetAll[get_all_feedback]
+    GC_Filter[Filter Data]
+    GC_Semantic[Semantic Search]
+    GC_LLM[ask_llm]
+    GC_Chart[Build Chart Base64]
+    GC_Table[Build Table]
+    GC_Final[final_answer]
 end
 
-%% Qdrant block
-subgraph Qdrant[QDRANT VECTOR DB\ncollection: feedback_vectors]
-    direction TB
-    Q_Vectors[Vectors 300D]\n
-    Q_Payloads[payload:\nID, Text, Level, service, office]
+GC_GetAll --> GC_Filter --> GC_Semantic --> GC_LLM
+GC_LLM --> GC_Chart --> GC_Final
+GC_LLM --> GC_Table --> GC_Final
+
+%% Utils
+subgraph Utils[utils.py]
+    U_Embed[embed]
+    U_Ask[ask_llm]
+    U_Search[search_feedback]
+    U_Dynamic[dynamic_cutoff]
+    U_GetAll[get_all_feedback]
 end
 
-%% NVIDIA API block
-subgraph NVIDIAAPI[NVIDIA API]
-    direction TB
-    nvidia_embed[Embeddings Endpoint\n(nvidia/llama-3.2-*)]
-    nvidia_chat[Chat Completion Endpoint\n(meta/llama-4-maverick-17b-128e)]
-end
-
-%% Connections
-GeneratedCode -->|embedding| U_Embed --> nvidia_embed
-GeneratedCode -->|ask_llm| U_AskLLM --> nvidia_chat
-GeneratedCode -->|semantic search| U_Search --> Qdrant
+GeneratedCode -->|embed| U_Embed --> NvidiaEmbed
+GeneratedCode -->|ask_llm| U_Ask --> NvidiaChat
+GeneratedCode -->|semantic search| U_Search --> QdrantDB
 U_Dynamic --> GeneratedCode
+GC_GetAll --> U_GetAll --> QdrantDB
 
-GC_GetAll --> U_GetAll --> Qdrant
-
-%% =======================
-%% File Ingestion Service
-%% =======================
-User -->|Upload CSV| Ingestion
-Frontend -->|POST /upload_csv| Ingestion
-
-subgraph Ingestion[FASTAPI FILE INGESTION SERVICE]
-    direction TB
-
-    ING_File[Upload CSV\n/ ServiceName split]
-    ING_Build[Build embedding_text:\n• Level\n• service\n• office\n• Text]
-    ING_Batch[Batch embedding\n(BATCH_SIZE_EMBEDDING=16)]
-    ING_Nvidia[get_embeddings_batch(texts)\n→ NVIDIA embeddings API]
-    ING_Ensure[ensure_collection(dim)\ncreate if missing]
-    ING_Qdrant[qdrant.upsert()]
+%% Qdrant
+subgraph QdrantDB[Qdrant Vector DB]
+    Q_Vectors[Vectors]
+    Q_Payloads[Payloads]
 end
 
-ING_File --> ING_Build --> ING_Batch --> ING_Nvidia --> ING_Ensure --> ING_Qdrant
-ING_Qdrant --> Qdrant
+%% NVIDIA
+subgraph NvidiaAPI[NVIDIA API]
+    NvidiaEmbed[Embeddings Endpoint]
+    NvidiaChat[Chat Completion Endpoint]
+end
+
+```

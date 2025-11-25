@@ -1,0 +1,54 @@
+@import "tailwindcss";
+
+:root {
+  --background: #f3f8ff;
+  --foreground: #0f172a;
+  --accent: #38bdf8;
+  --accent-secondary: #6366f1;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+html {
+  direction: rtl;
+  scroll-behavior: smooth;
+}
+
+body {
+  background: radial-gradient(circle at top left, rgba(56, 189, 248, 0.25), transparent 35%),
+    radial-gradient(circle at bottom right, rgba(99, 102, 241, 0.22), transparent 30%),
+    var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans), "Heebo", "Rubik", Arial, Helvetica, sans-serif;
+  margin: 0;
+  min-height: 100vh;
+}
+
+a {
+  color: var(--accent-secondary);
+}
+
+.shadow-aurora {
+  box-shadow: 0 20px 60px rgba(56, 189, 248, 0.25);
+}
+
+@keyframes floaty {
+  0% {
+    transform: translate3d(0, 0, 0);
+  }
+  50% {
+    transform: translate3d(-4px, 6px, 0);
+  }
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+.animate-floaty {
+  animation: floaty 12s ease-in-out infinite;
+}

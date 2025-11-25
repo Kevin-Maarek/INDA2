@@ -1,39 +1,26 @@
-# utils.py
 from typing import List, Dict, Any
 import json
 from qdrant_client import QdrantClient
-from qdrant_client.models import Filter, FieldCondition, Range, MatchValue
 from openai import OpenAI
 
-# =====================
-#  CONFIG
-# =====================
 
 QDRANT_URL = "http://localhost:6333"
 QDRANT_COLLECTION = "feedback_vectors"
 
-# NVIDIA / LLM config
 NVIDIA_API_KEY = "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"
 LLM_MODEL = "meta/llama-4-maverick-17b-128e-instruct"
 EMBED_MODEL = "nvidia/llama-3.2-nemoretriever-300m-embed-v2"
 NVIDIA_BASE_URL = "https://integrate.api.nvidia.com/v1"
-
-# =====================
-#  CLIENTS
-# =====================
 
 client = QdrantClient(url=QDRANT_URL)
 llm = OpenAI(api_key=NVIDIA_API_KEY, base_url=NVIDIA_BASE_URL)
 
 
 # =========================================================
-# NVIDIA / LLM
+# AI MODELS
 # =========================================================
 
 def embed(text: str) -> List[float]:
-    """
-    Returns an embedding vector for the given text.
-    """
     v = llm.embeddings.create(
         model=EMBED_MODEL,
         input=[text],
@@ -59,8 +46,7 @@ def ask_llm(system_prompt: str, user_prompt: str, max_tokens: int = 3000):
 # =========================================================
 # SEARCH IN QDRANT
 # =========================================================
-def search_feedback(vector, limit=200) -> List[Dict[str, Any]]:
-    """Semantic search returning list of records {score,payload}."""
+def search_feedback(vector, limit=10000) -> List[Dict[str, Any]]:
     results = client.search(
         collection_name=QDRANT_COLLECTION,
         query_vector=vector,
@@ -96,31 +82,6 @@ def filter_by_rating(min_rating: int, max_rating: int = None, limit=200):
 
     return [dict(h.payload) for h in hits]
 
-
-
-def trim_text_list(texts, max_tokens=70000):
-    """
-    Cuts text list so that total estimated tokens <= max_tokens.
-    Token estimate: ~4 chars per token (very safe for Hebrew).
-    """
-    trimmed = []
-    total_chars = 0
-    max_chars = max_tokens * 4  # conservative rule: 4 chars ≈ 1 token
-
-    for t in texts:
-        if t is None:
-            continue
-        if total_chars + len(t) > max_chars:
-            break
-        trimmed.append(t)
-        total_chars += len(t)
-
-    return trimmed
-
-
-# =========================================================
-# DYNAMIC CUTOFF WITH LLM FILTERING
-# =========================================================
 LLM_FILTER_PROMPT = """
 You are an LLM performing STRICT semantic filtering.
 
@@ -149,10 +110,7 @@ BEGIN.
 from typing import List, Dict, Any
 
 def trim_lines_safe(lines, max_tokens=70000):
-    """
-    Cuts ranked lines so that total estimated tokens <= max_tokens.
-    Uses 4 chars ≈ 1 token heuristic for Hebrew.
-    """
+
     trimmed = []
     total_chars = 0
     max_chars = max_tokens * 4
@@ -177,7 +135,6 @@ def dynamic_cutoff(
     if n == 0:
         return []
 
-    # ========= FIRST PASS: ENGINEERING CUTOFF =========
     scores = [float(r["score"]) for r in results]
     cutoff = n
 
@@ -197,16 +154,12 @@ def dynamic_cutoff(
     if len(initial_filtered) < min_keep:
         initial_filtered = results[:min_keep]
 
-    print("Initial Filtered Results after Engineering Cutoff:", initial_filtered)
-
-    # ========= SECOND PASS: LLM RANK FILTER =========
     lines = []
     for idx, r in enumerate(initial_filtered, start=1):
         text = r["payload"].get("Text", "").replace("\n", " ").strip()
         score = r["score"]
         lines.append(f"{idx}. [score={score:.3f}] {text}")
 
-    # keep LLM safe (prevent token overflow)
     safe_lines = trim_lines_safe(lines, max_tokens=60000)
     ranked_block = "\n".join(safe_lines)
 
@@ -233,10 +186,9 @@ def dynamic_cutoff(
     llm_answer = ask_llm(
         system_prompt=system_prompt,
         user_prompt=user_prompt,
-        max_tokens=100
+        max_tokens=10000
     )
 
-    # ========= PARSE OUTPUT =========
     try:
         remove_indices = eval(llm_answer)
         if not isinstance(remove_indices, list):
@@ -255,28 +207,7 @@ def dynamic_cutoff(
     return final_filtered
 
 
-# נניח שכבר יש לך:
-# qdrant = QdrantClient(...)
-# QDRANT_COLLECTION = "feedback_vectors"
-
-def get_all_feedback(limit: int = 5000) -> List[Dict[str, Any]]:
-    """
-    מחזיר עד `limit` פידבקים מה-collection,
-    בפורמט זהה ל-search_feedback:
-    [
-      {
-        "score": float,      # כאן נשים 1.0 כי אין חיפוש סמנטי
-        "payload": {
-            "ID": ...,
-            "Text": ...,
-            "Level": ...,
-            "service": ...,
-            "office": ...
-        }
-      },
-      ...
-    ]
-    """
+def get_all_feedback(limit: int = 10000) -> List[Dict[str, Any]]:
     all_results: List[Dict[str, Any]] = []
     offset = None
     page_size = 256
@@ -296,10 +227,9 @@ def get_all_feedback(limit: int = 5000) -> List[Dict[str, Any]]:
             break
 
         for p in points:
-            # p.payload הוא ה-payload המקורי ששמרת באינדוקס
             all_results.append(
                 {
-                    "score": 1.0,       # אין ציון סמנטי – נותנים קבוע
+                    "score": 1.0,     
                     "payload": p.payload
                 }
             )

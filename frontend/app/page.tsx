@@ -7,15 +7,12 @@ export default function HomePage() {
   const [responseObj, setResponseObj] = useState<any | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // לוגים בזמן אמת — רשימת משפטים
   const [logs, setLogs] = useState<string[]>([]);
   const [expanded, setExpanded] = useState(false);
 
-  // Dev Mode
   const [devMode, setDevMode] = useState(false);
   const [devHistory, setDevHistory] = useState<any[]>([]);
 
-  // 🔹 צפייה בפידבקים (Modal)
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
   const [feedbacks, setFeedbacks] = useState<any[]>([]);
   const [feedbackLoading, setFeedbackLoading] = useState(false);
@@ -25,9 +22,7 @@ export default function HomePage() {
   const [filterService, setFilterService] = useState("");
   const [filterLevel, setFilterLevel] = useState("");
 
-  // ----------------------------------------
-  // שליחת שאלה — Streaming EventSource
-  // ----------------------------------------
+
   const sendQuery = () => {
     if (!question.trim()) return;
 
@@ -71,8 +66,7 @@ export default function HomePage() {
           }
 
           setResponseObj(normalized);
-          setDevHistory(data.history || []); // היסטוריית ניסיונות ל-Dev Mode
-
+          setDevHistory(data.history || []); 
           setLoading(false);
           es.close();
         } else if (data.type === "error") {
@@ -98,9 +92,7 @@ export default function HomePage() {
     };
   };
 
-  // ----------------------------------------
-  // העלאת CSV
-  // ----------------------------------------
+
   const autoUploadCSV = async (file: File | null) => {
     if (!file) return;
 
@@ -128,9 +120,6 @@ export default function HomePage() {
     setLoading(false);
   };
 
-  // ----------------------------------------
-  // DEV MODE
-  // ----------------------------------------
   const renderDevMode = () => {
     if (!devMode) return null;
 
@@ -249,9 +238,6 @@ export default function HomePage() {
     );
   };
 
-  // ----------------------------------------
-  // FEEDBACK MODAL – לטעון מה-API
-  // ----------------------------------------
   const fetchFeedbacks = async () => {
     try {
       setFeedbackLoading(true);
@@ -279,7 +265,6 @@ export default function HomePage() {
 
   const openFeedbackModal = async () => {
     setShowFeedbackModal(true);
-    // בפתיחה ראשונית נטען בלי פילטרים
     setFilterOffice("");
     setFilterService("");
     setFilterLevel("");
@@ -290,7 +275,6 @@ export default function HomePage() {
     setShowFeedbackModal(false);
   };
 
-  // רשימות ייחודיות לפילטרים (מכאן ולא מהשרת)
   const officeOptions = useMemo(
     () => Array.from(new Set(feedbacks.map((f) => f.office).filter(Boolean))),
     [feedbacks]
@@ -345,7 +329,6 @@ export default function HomePage() {
           }}
           onClick={(e) => e.stopPropagation()}
         >
-          {/* כותרת + סגירה */}
           <div
             style={{
               display: "flex",
@@ -368,7 +351,6 @@ export default function HomePage() {
             </button>
           </div>
 
-          {/* פילטרים */}
           <div
             style={{
               display: "flex",
@@ -465,7 +447,6 @@ export default function HomePage() {
             </button>
           </div>
 
-          {/* תוכן הטבלה */}
           <div
             style={{
               flex: 1,
@@ -570,7 +551,6 @@ export default function HomePage() {
         />
       </div>
 
-      {/* אזור קלט ושילוח */}
 <div
   style={{
     display: "flex",
@@ -580,7 +560,6 @@ export default function HomePage() {
     width: "100%",
   }}
 >
-  {/* שורה 1 — INPUT + שלח */}
   <div
     style={{
       display: "flex",
@@ -626,7 +605,6 @@ export default function HomePage() {
     </button>
   </div>
 
-  {/* שורה 2 — כפתורים נוספים */}
   <div
     style={{
       display: "flex",
@@ -695,7 +673,6 @@ export default function HomePage() {
 </div>
 
 
-      {/* טוען */}
       {loading && (
         <div style={{ textAlign: "center", marginTop: 40 }}>
           <div className="loader"></div>
@@ -722,7 +699,6 @@ export default function HomePage() {
         </div>
       )}
 
-      {/* לוגים בזמן אמת — בלוק אחד שנפתח/נסגר */}
       {logs.length > 0 && (
         <div
           onClick={() => setExpanded(!expanded)}
@@ -742,10 +718,8 @@ export default function HomePage() {
           }}
         >
           {!expanded ? (
-            // מצב סגור — רק המשפט העדכני
             <>{`${logs.length}. ${logs[logs.length - 1]}`}</>
           ) : (
-            // מצב פתוח — מציג את כל ההיסטוריה
             <>
               {logs.map((line, idx) => `${idx + 1}. ${line}`).join("\n")}
             </>
@@ -753,10 +727,8 @@ export default function HomePage() {
         </div>
       )}
 
-      {/* Dev Mode Panel */}
       {renderDevMode()}
 
-      {/* פלט */}
       {!loading && responseObj && (
         <div
           style={{
@@ -770,7 +742,6 @@ export default function HomePage() {
             fontSize: 17,
           }}
         >
-          {/* טקסט */}
           {responseObj.text && (
             <div
               style={{
@@ -785,7 +756,6 @@ export default function HomePage() {
             </div>
           )}
 
-          {/* תמונה */}
           {responseObj.image && (
             <img
               src={
@@ -801,7 +771,6 @@ export default function HomePage() {
             />
           )}
 
-          {/* טבלה */}
           {Array.isArray(responseObj.table) && responseObj.table.length > 0 && (
             <table
               style={{
@@ -849,10 +818,8 @@ export default function HomePage() {
         </div>
       )}
 
-      {/* FEEDBACK POPUP */}
       {renderFeedbackModal()}
 
-      {/* אנימציות */}
       <style>
         {`
   @keyframes slideUp {

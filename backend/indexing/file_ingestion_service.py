@@ -1,3 +1,4 @@
+# C:\Users\davar\pr_inda> python -m uvicorn backend.indexing.file_ingestion_service:app --host 0.0.0.0 --port 8010
 import os
 import pandas as pd
 from fastapi import FastAPI, File, UploadFile

@@ -1,3 +1,4 @@
+#C:\Users\davar\pr_inda> python -m uvicorn backend.query.query_service:app --host 0.0.0.0 --port 8004
 from fastapi import FastAPI
 from pydantic import BaseModel
 from backend.query.agent import run_agent
@@ -23,13 +24,6 @@ app.add_middleware(
 class Query(BaseModel):
     question: str
 
-@app.post("/ask")
-async def ask(query: Query):
-    result = run_agent(query.question)
-    return {
-        "answer": result["final_answer"],
-        "dev_history": result["history"]
-    }
 
 @app.get("/ask_stream")
 async def ask_stream(question: str):
